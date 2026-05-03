@@ -49,8 +49,8 @@ export default function GuidesPage() {
           <div>
             <h2 className="text-3xl font-bold mb-6">Need personalized help?</h2>
             <p className="text-secondary leading-relaxed mb-8">
-              If you can&apos;t find what you&apos;re looking for in our guides, our AI assistant is ready to
-              help you with specific queries about your situation.
+              If you can&apos;t find what you&apos;re looking for in our guides, our AI assistant is
+              ready to help you with specific queries about your situation.
             </p>
             <button className="btn-primary">Chat with ElectoAI</button>
           </div>
