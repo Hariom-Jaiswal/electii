@@ -14,6 +14,16 @@ export default function Timeline({ phases }: { phases: ElectionPhase[] }) {
         const isCompleted = phase.status === 'completed';
         const isActive = phase.status === 'active';
 
+        // Extract nested ternaries for dot background
+        let dotBgClass = 'bg-accent text-secondary';
+        if (isCompleted) dotBgClass = 'bg-green-500 text-white';
+        else if (isActive) dotBgClass = 'bg-primary text-white animate-pulse';
+
+        // Extract nested ternaries for status label
+        let statusBgClass = 'bg-accent text-secondary';
+        if (isCompleted) statusBgClass = 'bg-green-500/10 text-green-600';
+        else if (isActive) statusBgClass = 'bg-primary/10 text-primary';
+
         return (
           <div
             key={phase.id}
@@ -21,13 +31,7 @@ export default function Timeline({ phases }: { phases: ElectionPhase[] }) {
           >
             {/* Dot */}
             <div
-              className={`flex items-center justify-center w-10 h-10 rounded-full border border-background shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 transition-colors ${
-                isCompleted
-                  ? 'bg-green-500 text-white'
-                  : isActive
-                    ? 'bg-primary text-white animate-pulse'
-                    : 'bg-accent text-secondary'
-              }`}
+              className={`flex items-center justify-center w-10 h-10 rounded-full border border-background shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 z-10 transition-colors ${dotBgClass}`}
             >
               {isCompleted ? (
                 <CheckCircle2 className="h-5 w-5" />
@@ -50,13 +54,7 @@ export default function Timeline({ phases }: { phases: ElectionPhase[] }) {
                   </time>
                 </div>
                 <span
-                  className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${
-                    isCompleted
-                      ? 'bg-green-500/10 text-green-600'
-                      : isActive
-                        ? 'bg-primary/10 text-primary'
-                        : 'bg-accent text-secondary'
-                  }`}
+                  className={`text-[10px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full ${statusBgClass}`}
                 >
                   {phase.status}
                 </span>

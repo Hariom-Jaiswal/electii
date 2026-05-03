@@ -110,9 +110,8 @@ export default function ChatWindow() {
   );
 
   return (
-    <div
+    <section
       className="flex flex-col h-[600px] glass-card rounded-2xl overflow-hidden"
-      role="region"
       aria-label="ElectoAI Chat Assistant"
     >
       {/* Header */}
@@ -146,40 +145,44 @@ export default function ChatWindow() {
         aria-relevant="additions"
       >
         {isMounted &&
-          messages.map((m) => (
-            <div key={m.id} className={`flex gap-4 ${m.role === 'user' ? 'flex-row-reverse' : ''}`}>
-              <div
-                className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center ${
-                  m.role === 'user'
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'bg-primary text-primary-foreground'
-                }`}
-                aria-hidden="true"
-              >
-                {m.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
-              </div>
-              <div
-                className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${
-                  m.role === 'user'
-                    ? 'bg-primary text-primary-foreground rounded-tr-none'
-                    : 'bg-card text-card-foreground border rounded-tl-none'
-                }`}
-              >
-                <p>{m.content}</p>
+          messages.map((m) => {
+            const isUser = m.role === 'user';
+            const alignmentClass = isUser ? 'flex-row-reverse' : '';
+            const avatarClass = isUser
+              ? 'bg-secondary text-secondary-foreground'
+              : 'bg-primary text-primary-foreground';
+            const bubbleClass = isUser
+              ? 'bg-primary text-primary-foreground rounded-tr-none'
+              : 'bg-card text-card-foreground border rounded-tl-none';
+            const timestampClass = isUser ? 'text-right' : '';
+
+            return (
+              <div key={m.id} className={`flex gap-4 ${alignmentClass}`}>
                 <div
-                  className={`text-[10px] mt-2 opacity-60 ${m.role === 'user' ? 'text-right' : ''}`}
-                  aria-label={`Sent at ${m.timestamp.toLocaleTimeString()}`}
+                  className={`w-8 h-8 rounded-full shrink-0 flex items-center justify-center ${avatarClass}`}
+                  aria-hidden="true"
                 >
-                  {m.timestamp.toLocaleTimeString(undefined, {
-                    hour: '2-digit',
-                    minute: '2-digit',
-                  })}
+                  {isUser ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
+                </div>
+                <div
+                  className={`max-w-[80%] px-4 py-3 rounded-2xl text-sm leading-relaxed shadow-sm ${bubbleClass}`}
+                >
+                  <p>{m.content}</p>
+                  <div
+                    className={`text-[10px] mt-2 opacity-60 ${timestampClass}`}
+                    aria-label={`Sent at ${m.timestamp.toLocaleTimeString()}`}
+                  >
+                    {m.timestamp.toLocaleTimeString(undefined, {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                    })}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         {isLoading && (
-          <div className="flex gap-4" aria-label="ElectoAI is typing" role="status">
+          <div className="flex gap-4">
             <div
               className="w-8 h-8 rounded-full bg-primary text-primary-foreground flex items-center justify-center"
               aria-hidden="true"
@@ -187,7 +190,9 @@ export default function ChatWindow() {
               <Bot className="h-4 w-4" />
             </div>
             <div className="bg-card border rounded-2xl rounded-tl-none px-4 py-3 shadow-sm">
-              <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+              <output aria-label="ElectoAI is typing">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" aria-hidden="true" />
+              </output>
             </div>
           </div>
         )}
@@ -225,6 +230,6 @@ export default function ChatWindow() {
           AI generated response • Always verify with official sources
         </p>
       </div>
-    </div>
+    </section>
   );
 }

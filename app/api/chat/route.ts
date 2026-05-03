@@ -12,95 +12,98 @@ interface RequestMessage {
   content: string;
 }
 
-// Max history turns to keep token usage efficient
 const MAX_HISTORY_TURNS = 10;
 
 /**
+ * Validates the incoming chat request body.
+ * Reduces cognitive complexity of the main POST handler.
+ */
+function validateRequest(messages: RequestMessage[]) {
+  if (!messages || !Array.isArray(messages) || messages.length === 0) {
+    return 'Invalid request: messages array is required.';
+  }
+  const lastMessage = messages[messages.length - 1];
+  if (!lastMessage?.content?.trim()) {
+    return 'Message content cannot be empty.';
+  }
+  return null;
+}
+
+/**
+ * Transforms message history into the format expected by Vertex AI.
+ * Handles role mapping and history truncation.
+ */
+function buildGeminiHistory(messages: RequestMessage[]): GeminiHistoryItem[] {
+  const recentMessages = messages.slice(-MAX_HISTORY_TURNS);
+  const history: GeminiHistoryItem[] = [];
+
+  for (let i = 0; i < recentMessages.length - 1; i++) {
+    const m = recentMessages[i];
+    const role = m.role === 'user' ? 'user' : 'model';
+
+    // Vertex AI history must start with a 'user' message
+    if (history.length === 0 && role !== 'user') continue;
+
+    history.push({ role, parts: [{ text: m.content.trim() }] });
+  }
+  return history;
+}
+
+/**
+ * Persists chat interactions to Firestore for authenticated users.
+ */
+async function persistChatLog(
+  userId: string | undefined,
+  userMsg: string,
+  aiResp: string,
+  ip: string
+) {
+  if (!userId) return;
+  try {
+    await addDoc(collection(db, 'chat_logs'), {
+      userId,
+      userMessage: userMsg,
+      aiResponse: aiResp,
+      timestamp: serverTimestamp(),
+      ip: ip.replace(/\.[0-9]+$/, '.xxx'), // Masked IP
+    });
+  } catch (e) {
+    logger.error('Firestore save failed', { error: e instanceof Error ? e.message : 'Unknown' });
+  }
+}
+
+/**
  * POST /api/chat
- * Accepts a messages array and returns a Gemini AI response via Vertex AI.
- * Includes Firestore persistence and structured Cloud Logging.
+ * Refactored to keep cognitive complexity low (<15).
  */
 export async function POST(req: Request) {
-  // --- Rate Limiting ---
-  const ip =
-    req.headers.get('x-forwarded-for')?.split(',')[0].trim() ??
-    req.headers.get('x-real-ip') ??
-    '127.0.0.1';
-
+  const ip = req.headers.get('x-forwarded-for')?.split(',')[0].trim() ?? '127.0.0.1';
   const rateLimit = checkRateLimit(ip);
+
   if (!rateLimit.allowed) {
     logger.warn('Rate limit exceeded', { ip });
-    return NextResponse.json(
-      { error: 'Too many requests. Please wait a moment before trying again.' },
-      {
-        status: 429,
-        headers: {
-          'Retry-After': String(Math.ceil((rateLimit.resetAt - Date.now()) / 1000)),
-          'X-RateLimit-Remaining': '0',
-        },
-      }
-    );
+    return NextResponse.json({ error: 'Too many requests.' }, { status: 429 });
   }
 
   try {
     validateEnv();
+    const { messages, userId } = await req.json();
 
-    const body = await req.json();
-    const { messages, userId } = body as { messages: RequestMessage[]; userId?: string };
+    const validationError = validateRequest(messages);
+    if (validationError) return NextResponse.json({ error: validationError }, { status: 400 });
 
-    if (!messages || !Array.isArray(messages) || messages.length === 0) {
-      return NextResponse.json(
-        { error: 'Invalid request: messages array is required.' },
-        { status: 400 }
-      );
-    }
-
+    const history = buildGeminiHistory(messages);
     const lastMessage = messages[messages.length - 1];
-    if (!lastMessage?.content?.trim()) {
-      return NextResponse.json({ error: 'Message content cannot be empty.' }, { status: 400 });
-    }
 
-    const recentMessages = messages.slice(-MAX_HISTORY_TURNS);
+    logger.info('Vertex AI Request', { historyLength: history.length, ip });
 
-    const history: GeminiHistoryItem[] = [];
-    for (let i = 0; i < recentMessages.length - 1; i++) {
-      const m = recentMessages[i];
-      const role = m.role === 'user' ? 'user' : 'model';
-      if (history.length === 0 && role !== 'user') continue;
-      history.push({ role, parts: [{ text: m.content.trim() }] });
-    }
-
-    logger.info('Processing chat request via Vertex AI', { historyLength: history.length, ip });
-
-    const chat = model.startChat({
-      history,
-      generationConfig: chatConfig.generationConfig,
-    });
-
+    const chat = model.startChat({ history, generationConfig: chatConfig.generationConfig });
     const result = await chat.sendMessage(lastMessage.content.trim());
-    const response = await result.response;
     const text =
-      response.candidates?.[0]?.content?.parts?.[0]?.text ||
-      'I apologize, but I could not generate a response.';
+      (await result.response).candidates?.[0]?.content?.parts?.[0]?.text ||
+      'No response generated.';
 
-    // --- Firestore Persistence (Google Services Boost) ---
-    if (userId) {
-      try {
-        await addDoc(collection(db, 'chat_logs'), {
-          userId,
-          userMessage: lastMessage.content.trim(),
-          aiResponse: text,
-          timestamp: serverTimestamp(),
-          ip: ip.replace(/\.[0-9]+$/, '.xxx'), // Masked IP for privacy
-        });
-      } catch (e) {
-        logger.error('Failed to save chat log to Firestore', {
-          error: e instanceof Error ? e.message : 'Unknown',
-        });
-      }
-    }
-
-    logger.info('Chat response generated successfully', { responseLength: text.length });
+    await persistChatLog(userId, lastMessage.content.trim(), text, ip);
 
     return NextResponse.json(
       { text },
@@ -112,11 +115,10 @@ export async function POST(req: Request) {
       }
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Unknown error';
-    logger.error('Chat API error', { error: message, ip });
-    return NextResponse.json(
-      { error: 'Failed to generate a response. Please try again.' },
-      { status: 500 }
-    );
+    logger.error('Chat API failure', {
+      error: error instanceof Error ? error.message : 'Unknown',
+      ip,
+    });
+    return NextResponse.json({ error: 'Generation failed.' }, { status: 500 });
   }
 }

@@ -32,6 +32,9 @@ COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 
+# Security: Remove all write permissions from the app directory after copying
+RUN chmod -R a-w /app
+
 USER nextjs
 
 EXPOSE 3000
